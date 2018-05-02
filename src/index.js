@@ -1,10 +1,10 @@
 export default function plugin({types: t}) {
-  const isImportFolivora = (importDeclarationPath) => {
-    return t.isStringLiteral(importDeclarationPath.node.source, {value: 'folivora'});
+  const isImportLajure = (importDeclarationPath) => {
+    return t.isStringLiteral(importDeclarationPath.node.source, {value: 'lajure'});
   };
 
-  const isRequireFolivora = (callExpressionPath) => {
-    return t.isIdentifier(callExpressionPath.node.callee, {name: 'require'}) && callExpressionPath.node.arguments.find(argument => t.isStringLiteral(argument, {value: 'folivora'}));
+  const isRequireLajure = (callExpressionPath) => {
+    return t.isIdentifier(callExpressionPath.node.callee, {name: 'require'}) && callExpressionPath.node.arguments.find(argument => t.isStringLiteral(argument, {value: 'lajure'}));
   };
 
   const isCallTCall = (callExpressionPath) => {
@@ -77,23 +77,23 @@ export default function plugin({types: t}) {
   };
 
   return {
-    name: "babel-plugin-folivora",
+    name: "babel-plugin-lajure",
     visitor: {
       ImportDeclaration(path) {
-        if (isImportFolivora(path)) {
+        if (isImportLajure(path)) {
           this.callIdentifier = callIdentifierFromImport(path);
         }
       },
 
       CallExpression(path) {
-        if (isRequireFolivora(path)) {
+        if (isRequireLajure(path)) {
           this.callIdentifier = callIdentifierFromRequire(path);
         }
 
         if (isCallTCall(path)) {
           if (!this.callIdentifier) {
-            const packageIdentifier = path.scope.generateUidIdentifier('F');
-            path.findParent(path => path.isProgram()).node.body.unshift(t.importDeclaration([t.importNamespaceSpecifier(packageIdentifier)], t.stringLiteral('folivora')));
+            const packageIdentifier = path.scope.generateUidIdentifier('L');
+            path.findParent(path => path.isProgram()).node.body.unshift(t.importDeclaration([t.importNamespaceSpecifier(packageIdentifier)], t.stringLiteral('lajure')));
 
             this.callIdentifier = t.memberExpression(packageIdentifier, t.identifier('call'));
           }
