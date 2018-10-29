@@ -47,6 +47,14 @@ pluginTester({
     {
       code:   'import { filter, first } from "lajure";\ntCall([1, 2, 3], filter(x => x % 2 == 0), first());',
       output: 'import * as _L from "lajure";\nimport { filter, first } from "lajure";\n_L.call([1, 2, 3], _x => filter(x => x % 2 == 0, _x), _x => first(_x));'
+    },
+    {
+      code:   'tCondCall(1, true, inc(1), false, dec(_, 1));',
+      output: 'import * as _L from "lajure";\n_L.condCall(1, true, _x => inc(1, _x), false, _x => dec(_x, 1));'
+    },
+    {
+      code:   'tSomeCall(1, inc(1), dec(_, 1));',
+      output: 'import * as _L from "lajure";\n_L.someCall(1, _x => inc(1, _x), _x => dec(_x, 1));'
     }
   ]
 });

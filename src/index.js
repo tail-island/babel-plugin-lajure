@@ -11,9 +11,18 @@ export default function plugin({types: t}) {
     return t.isIdentifier(callExpressionPath.node.callee, {name: 'tCall'});
   };
 
-  const callIdentifierFromImport = (importDeclarationPath) => {
+  const isCallTCondCall = (callExpressionPath) => {
+    return t.isIdentifier(callExpressionPath.node.callee, {name: 'tCondCall'});
+  };
+
+  const isCallTSomeCall = (callExpressionPath) => {
+    return t.isIdentifier(callExpressionPath.node.callee, {name: 'tSomeCall'});
+
+  };
+
+  const functionIdentifierFromImport = (importDeclarationPath, name) => {
     const functionName = (() => {
-      const importSpecifier = importDeclarationPath.node.specifiers.find(specifier => t.isImportSpecifier(specifier) && specifier.imported.name == 'call');
+      const importSpecifier = importDeclarationPath.node.specifiers.find(specifier => t.isImportSpecifier(specifier) && specifier.imported.name == name);
       if (!importSpecifier) {
         return undefined;
       }
@@ -35,13 +44,13 @@ export default function plugin({types: t}) {
     })();
 
     if (packageName) {
-      return t.memberExpression(t.identifier(packageName), t.Identifier('call'));
+      return t.memberExpression(t.identifier(packageName), t.Identifier(name));
     }
 
     return undefined;
   };
 
-  const callIdentifierFromRequire = (requireExpressionPath) => {
+  const functionIdentifierFromRequire = (requireExpressionPath, name) => {
     const id = requireExpressionPath.parent.id;
 
     const functionName = (() => {
@@ -49,7 +58,7 @@ export default function plugin({types: t}) {
         return undefined;
       }
 
-      const objectProperty = id.properties.find(property => t.isObjectProperty(property) && property.key.name == 'call');
+      const objectProperty = id.properties.find(property => t.isObjectProperty(property) && property.key.name == name);
       if (!objectProperty) {
         return undefined;
       }
@@ -81,49 +90,80 @@ export default function plugin({types: t}) {
     visitor: {
       ImportDeclaration(path) {
         if (isImportLajure(path)) {
-          this.callIdentifier = callIdentifierFromImport(path);
+          this.callIdentifier     = functionIdentifierFromImport(path, 'call');
+          this.condCallIdentifier = functionIdentifierFromImport(path, 'condCall');
+          this.someCallIdentifier = functionIdentifierFromImport(path, 'someCall');
         }
       },
 
       CallExpression(path) {
         if (isRequireLajure(path)) {
-          this.callIdentifier = callIdentifierFromRequire(path);
+          this.callIdentifier     = functionIdentifierFromRequire(path, 'call');
+          this.condCallIdentifier = functionIdentifierFromRequire(path, 'condCall');
+          this.someCallIdentifier = functionIdentifierFromRequire(path, 'someCall');
         }
 
-        if (isCallTCall(path)) {
-          if (!this.callIdentifier) {
-            const packageIdentifier = path.scope.generateUidIdentifier('L');
-            path.findParent(path => path.isProgram()).node.body.unshift(t.importDeclaration([t.importNamespaceSpecifier(packageIdentifier)], t.stringLiteral('lajure')));
+        if ((isCallTCall(path) && !this.callIdentifier) || (isCallTCondCall(path) && !this.callCondCallIdentifier) || (isCallTSomeCall(path) && !this.callSomeCallIdentifier)) {
+          const packageIdentifier = path.scope.generateUidIdentifier('L');
+          path.findParent(path => path.isProgram()).node.body.unshift(t.importDeclaration([t.importNamespaceSpecifier(packageIdentifier)], t.stringLiteral('lajure')));
 
+          if (!this.callIdentifier) {
             this.callIdentifier = t.memberExpression(packageIdentifier, t.identifier('call'));
           }
+
+          if (!this.condCallIdentifier) {
+            this.condCallIdentifier = t.memberExpression(packageIdentifier, t.identifier('condCall'));
+          }
+
+          if (!this.someCallIdentifier) {
+            this.someCallIdentifier = t.memberExpression(packageIdentifier, t.identifier('someCall'));
+          }
+        }
+
+        const convertArgument = (body, argIdentifier) => {
+          if (t.isCallExpression(body)) {
+            const underscoreIndex = body.arguments.findIndex(argument => t.isIdentifier(argument, {name: '_'}));
+
+            if (underscoreIndex >= 0) {
+              body.arguments[underscoreIndex] = argIdentifier;
+            } else {
+              body.arguments.push(argIdentifier);
+            }
+
+            return body;
+          }
+
+          if (t.isArrowFunctionExpression(body) || t.isIdentifier(body)) {
+            return t.callExpression(body, [argIdentifier]);
+          }
+
+          throw 'Invalid arguments';
+        };
+
+        if (isCallTCall(path)) {
           path.node.callee = this.callIdentifier;
 
           const argIdentifier = path.scope.generateUidIdentifier('x');
           for (let i = 1; i < path.node.arguments.length; ++i) {
-            const argument = (() => {
-              const body = path.node.arguments[i];
+            path.node.arguments[i] = t.arrowFunctionExpression([argIdentifier], convertArgument(path.node.arguments[i], argIdentifier));
+          }
+        }
 
-              if (t.isCallExpression(body)) {
-                const underscoreIndex = body.arguments.findIndex(argument => t.isIdentifier(argument, {name: '_'}));
+        if (isCallTCondCall(path)) {
+          path.node.callee = this.condCallIdentifier;
 
-                if (underscoreIndex >= 0) {
-                  body.arguments[underscoreIndex] = argIdentifier;
-                } else {
-                  body.arguments.push(argIdentifier);
-                }
+          const argIdentifier = path.scope.generateUidIdentifier('x');
+          for (let i = 2; i < path.node.arguments.length; i += 2) {
+            path.node.arguments[i] = t.arrowFunctionExpression([argIdentifier], convertArgument(path.node.arguments[i], argIdentifier));
+          }
+        }
 
-                return body;
-              }
+        if (isCallTSomeCall(path)) {
+          path.node.callee = this.someCallIdentifier;
 
-              if (t.isArrowFunctionExpression(body) || t.isIdentifier(body)) {
-                return t.callExpression(body, [argIdentifier]);
-              }
-
-              throw 'Invalid arguments';
-            })();
-
-            path.node.arguments[i] = t.arrowFunctionExpression([argIdentifier], argument);
+          const argIdentifier = path.scope.generateUidIdentifier('x');
+          for (let i = 1; i < path.node.arguments.length; ++i) {
+            path.node.arguments[i] = t.arrowFunctionExpression([argIdentifier], convertArgument(path.node.arguments[i], argIdentifier));
           }
         }
       }
