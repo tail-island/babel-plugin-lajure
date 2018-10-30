@@ -1,6 +1,6 @@
 {
   "name": "babel-plugin-lajure",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Clojure like Functional Programming library using ES6 iterable/iterator.",
   "author": "OJIMA Ryoji",
   "license": "EPL-1.0",

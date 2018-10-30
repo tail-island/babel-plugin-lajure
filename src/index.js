@@ -20,6 +20,11 @@ export default function plugin({types: t}) {
 
   };
 
+  const isCallLazySeq = (callExpressionPath) => {
+    return t.isIdentifier(callExpressionPath.node.callee, {name: 'lazySeq'});
+
+  };
+
   const functionIdentifierFromImport = (importDeclarationPath, name) => {
     const functionName = (() => {
       const importSpecifier = importDeclarationPath.node.specifiers.find(specifier => t.isImportSpecifier(specifier) && specifier.imported.name == name);
@@ -90,20 +95,22 @@ export default function plugin({types: t}) {
     visitor: {
       ImportDeclaration(path) {
         if (isImportLajure(path)) {
-          this.callIdentifier     = functionIdentifierFromImport(path, 'call');
-          this.condCallIdentifier = functionIdentifierFromImport(path, 'condCall');
-          this.someCallIdentifier = functionIdentifierFromImport(path, 'someCall');
+          this.callIdentifier      = functionIdentifierFromImport(path, 'call');
+          this.condCallIdentifier  = functionIdentifierFromImport(path, 'condCall');
+          this.someCallIdentifier  = functionIdentifierFromImport(path, 'someCall');
+          this.lazySeqFnIdentifier = functionIdentifierFromImport(path, 'lazySeqFn');
         }
       },
 
       CallExpression(path) {
         if (isRequireLajure(path)) {
-          this.callIdentifier     = functionIdentifierFromRequire(path, 'call');
-          this.condCallIdentifier = functionIdentifierFromRequire(path, 'condCall');
-          this.someCallIdentifier = functionIdentifierFromRequire(path, 'someCall');
+          this.callIdentifier      = functionIdentifierFromRequire(path, 'call');
+          this.condCallIdentifier  = functionIdentifierFromRequire(path, 'condCall');
+          this.someCallIdentifier  = functionIdentifierFromRequire(path, 'someCall');
+          this.lazySeqFnIdentifier = functionIdentifierFromRequire(path, 'lazySeqFn');
         }
 
-        if ((isCallTCall(path) && !this.callIdentifier) || (isCallTCondCall(path) && !this.callCondCallIdentifier) || (isCallTSomeCall(path) && !this.callSomeCallIdentifier)) {
+        if ((isCallTCall(path) && !this.callIdentifier) || (isCallTCondCall(path) && !this.callCondCallIdentifier) || (isCallTSomeCall(path) && !this.callSomeCallIdentifier) || (isCallLazySeq(path) && !this.lazySeqFnIdentifier)) {
           const packageIdentifier = path.scope.generateUidIdentifier('L');
           path.findParent(path => path.isProgram()).node.body.unshift(t.importDeclaration([t.importNamespaceSpecifier(packageIdentifier)], t.stringLiteral('lajure')));
 
@@ -117,6 +124,10 @@ export default function plugin({types: t}) {
 
           if (!this.someCallIdentifier) {
             this.someCallIdentifier = t.memberExpression(packageIdentifier, t.identifier('someCall'));
+          }
+
+          if (!this.lazySeqFnIdentifier) {
+            this.lazySeqFnIdentifier = t.memberExpression(packageIdentifier, t.identifier('lazySeqFn'));
           }
         }
 
@@ -152,7 +163,7 @@ export default function plugin({types: t}) {
         if (isCallTCondCall(path)) {
           path.node.callee = this.condCallIdentifier;
 
-          const argIdentifier = path.scope.generateUidIdentifier('x');
+          const argIdentifier = path.scope.generateUidIdentifier('x');2
           for (let i = 2; i < path.node.arguments.length; i += 2) {
             path.node.arguments[i] = t.arrowFunctionExpression([argIdentifier], convertArgument(path.node.arguments[i], argIdentifier));
           }
@@ -165,6 +176,11 @@ export default function plugin({types: t}) {
           for (let i = 1; i < path.node.arguments.length; ++i) {
             path.node.arguments[i] = t.arrowFunctionExpression([argIdentifier], convertArgument(path.node.arguments[i], argIdentifier));
           }
+        }
+
+        if (isCallLazySeq(path)) {
+          path.node.callee = this.lazySeqFnIdentifier;
+          path.node.arguments[0] = t.arrowFunctionExpression([], path.node.arguments[0]);
         }
       }
     }

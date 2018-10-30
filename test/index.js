@@ -55,6 +55,10 @@ pluginTester({
     {
       code:   'tSomeCall(1, inc(1), dec(_, 1));',
       output: 'import * as _L from "lajure";\n_L.someCall(1, _x => inc(1, _x), _x => dec(_x, 1));'
+    },
+    {
+      code:   'cons(x, lazySeq(foo(x + 1)));',
+      output: 'import * as _L from "lajure";\ncons(x, _L.lazySeqFn(() => foo(x + 1)));'
     }
   ]
 });
